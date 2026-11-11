@@ -85,3 +85,4 @@ export async function POST(request: NextRequest) {
     return errorResponse(error.message || 'Failed to register serial numbers', 500);
   }
 }
+
