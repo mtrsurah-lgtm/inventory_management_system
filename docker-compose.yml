@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # -------------------------------------------------------------
+  # PostgreSQL 16 Enterprise Relational Database
+  # -------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: inventory_pro_db
+    restart: always
+    environment:
+      POSTGRES_USER: inventory
+      POSTGRES_PASSWORD: inventory_secret
+      POSTGRES_DB: inventory_pro
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventory -d inventory_pro"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------------------------
+  # Redis 7 In-Memory Cache & Background Queue
+  # -------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: inventory_pro_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------------------------
+  # Inventory Pro Next.js / Node.js Full-Stack Application
+  # -------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: inventory_pro_app
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: "postgresql://inventory:inventory_secret@db:5432/inventory_pro?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      JWT_SECRET: "inventory-pro-enterprise-secure-jwt-secret-key-2026-production"
+      NEXT_PUBLIC_APP_NAME: "Inventory Pro"
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+

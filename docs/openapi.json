@@ -1,0 +1,523 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Inventory Pro Enterprise API",
+    "version": "1.0.0",
+    "description": "Production-ready RESTful API for Inventory Pro - Multi-Tenant Inventory & Supply Chain Management System.",
+    "contact": {
+      "name": "Inventory Pro Engineering Team",
+      "email": "support@inventorypro.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000/api/v1",
+      "description": "Local Development Server"
+    },
+    {
+      "url": "https://api.inventorypro.com/api/v1",
+      "description": "Production API Gateway"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT Bearer Token header: 'Authorization: Bearer <token>' or session cookie 'inv_pro_token'."
+      }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": { "type": "object" },
+          "message": { "type": "string" },
+          "error": { "type": "string" },
+          "details": { "type": "array", "items": { "type": "string" } },
+          "meta": { "type": "object" }
+        },
+        "required": ["success"]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "example": "admin@inventorypro.com" },
+          "password": { "type": "string", "example": "Password123!" }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string", "example": "Wireless Barcode Scanner Pro" },
+          "sku": { "type": "string", "example": "ELEC-WBS-001" },
+          "barcode": { "type": "string", "example": "8901234567890" },
+          "description": { "type": "string" },
+          "purchaseCost": { "type": "number", "example": 45.00 },
+          "sellingPrice": { "type": "number", "example": 89.99 },
+          "taxRate": { "type": "number", "example": 8.5 },
+          "minStock": { "type": "number", "example": 10 },
+          "maxStock": { "type": "number", "example": 100 },
+          "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE", "ARCHIVED"] },
+          "categoryId": { "type": "string" },
+          "brandId": { "type": "string" },
+          "unitId": { "type": "string" }
+        }
+      },
+      "StockBalance": {
+        "type": "object",
+        "properties": {
+          "productId": { "type": "string" },
+          "locationId": { "type": "string" },
+          "onHand": { "type": "number", "example": 120 },
+          "reserved": { "type": "number", "example": 5 },
+          "available": { "type": "number", "example": 115 },
+          "inTransit": { "type": "number", "example": 0 }
+        }
+      },
+      "StockMovement": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "movementType": {
+            "type": "string",
+            "enum": [
+              "OPENING_BALANCE", "PURCHASE_RECEIPT", "SALE", "CUSTOMER_RETURN",
+              "SUPPLIER_RETURN", "TRANSFER_OUT", "TRANSFER_IN",
+              "ADJUSTMENT_INCREASE", "ADJUSTMENT_DECREASE", "DAMAGE_WRITE_OFF"
+            ]
+          },
+          "quantity": { "type": "number" },
+          "unitCost": { "type": "number" },
+          "totalCost": { "type": "number" },
+          "referenceType": { "type": "string" },
+          "referenceId": { "type": "string" },
+          "notes": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "StockAdjustmentRequest": {
+        "type": "object",
+        "required": ["locationId", "reason", "items"],
+        "properties": {
+          "locationId": { "type": "string" },
+          "reason": { "type": "string", "example": "Physical inventory count discrepancy" },
+          "notes": { "type": "string" },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["productId", "quantity", "type"],
+              "properties": {
+                "productId": { "type": "string" },
+                "quantity": { "type": "number", "example": 5 },
+                "type": { "type": "string", "enum": ["INCREASE", "DECREASE"] }
+              }
+            }
+          }
+        }
+      },
+      "StockTransferRequest": {
+        "type": "object",
+        "required": ["sourceLocationId", "destinationLocationId", "items"],
+        "properties": {
+          "sourceLocationId": { "type": "string" },
+          "destinationLocationId": { "type": "string" },
+          "notes": { "type": "string" },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["productId", "quantity"],
+              "properties": {
+                "productId": { "type": "string" },
+                "quantity": { "type": "number", "example": 25 }
+              }
+            }
+          }
+        }
+      },
+      "PurchaseOrderRequest": {
+        "type": "object",
+        "required": ["supplierId", "locationId", "items"],
+        "properties": {
+          "supplierId": { "type": "string" },
+          "locationId": { "type": "string" },
+          "notes": { "type": "string" },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["productId", "quantity", "unitCost"],
+              "properties": {
+                "productId": { "type": "string" },
+                "quantity": { "type": "number", "example": 50 },
+                "unitCost": { "type": "number", "example": 45.00 },
+                "taxRate": { "type": "number", "example": 8.5 }
+              }
+            }
+          }
+        }
+      },
+      "PurchaseReceiptRequest": {
+        "type": "object",
+        "required": ["purchaseOrderId", "locationId", "items"],
+        "properties": {
+          "purchaseOrderId": { "type": "string" },
+          "locationId": { "type": "string" },
+          "notes": { "type": "string" },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["purchaseOrderItemId", "productId", "receivedQuantity"],
+              "properties": {
+                "purchaseOrderItemId": { "type": "string" },
+                "productId": { "type": "string" },
+                "receivedQuantity": { "type": "number", "example": 50 },
+                "rejectedQuantity": { "type": "number", "example": 0 },
+                "unitCost": { "type": "number", "example": 45.00 }
+              }
+            }
+          }
+        }
+      },
+      "PosCheckoutRequest": {
+        "type": "object",
+        "required": ["locationId", "paymentMethod", "items"],
+        "properties": {
+          "locationId": { "type": "string" },
+          "customerId": { "type": "string" },
+          "paymentMethod": { "type": "string", "enum": ["CASH", "CARD", "SPLIT", "ACCOUNT"] },
+          "amountPaid": { "type": "number", "example": 100.00 },
+          "discountAmount": { "type": "number", "example": 0 },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["productId", "quantity", "unitPrice"],
+              "properties": {
+                "productId": { "type": "string" },
+                "quantity": { "type": "number", "example": 2 },
+                "unitPrice": { "type": "number", "example": 89.99 },
+                "taxRate": { "type": "number", "example": 8.5 }
+              }
+            }
+          }
+        }
+      },
+      "SalesReturnRequest": {
+        "type": "object",
+        "required": ["salesOrderId", "locationId", "items"],
+        "properties": {
+          "salesOrderId": { "type": "string" },
+          "locationId": { "type": "string" },
+          "reason": { "type": "string", "example": "Customer purchased wrong model" },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["productId", "quantity", "condition", "restockApproved"],
+              "properties": {
+                "productId": { "type": "string" },
+                "quantity": { "type": "number", "example": 1 },
+                "refundAmount": { "type": "number", "example": 89.99 },
+                "condition": { "type": "string", "enum": ["UNOPENED", "OPENED", "DAMAGED", "DEFECTIVE"] },
+                "restockApproved": { "type": "boolean", "example": true }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "summary": "Authenticate user and issue JWT",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful, returns JWT token and user profile." },
+          "401": { "description": "Invalid email or password credentials." }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "Retrieve current authenticated user and permissions",
+        "responses": {
+          "200": { "description": "User profile with roles and permissions." },
+          "401": { "description": "Unauthorized." }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Clear session and invalidate token",
+        "responses": {
+          "200": { "description": "Logged out successfully." }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "summary": "List all products with balances and filters",
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "categoryId", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "List of products." }
+        }
+      },
+      "post": {
+        "summary": "Create a new product with optional initial stock",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Product" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Product created successfully." },
+          "409": { "description": "SKU or barcode already exists." }
+        }
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "summary": "Get product details by ID",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Product record." } }
+      },
+      "put": {
+        "summary": "Update product details",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Product updated." } }
+      },
+      "delete": {
+        "summary": "Soft delete or archive product",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Product archived." } }
+      }
+    },
+    "/stock/balances": {
+      "get": {
+        "summary": "Query real-time stock balances across locations",
+        "parameters": [
+          { "name": "locationId", "in": "query", "schema": { "type": "string" } },
+          { "name": "productId", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Stock balances with On-Hand, Reserved, and Available numbers." }
+        }
+      }
+    },
+    "/stock/movements": {
+      "get": {
+        "summary": "Query permanent stock movement audit ledger",
+        "parameters": [
+          { "name": "productId", "in": "query", "schema": { "type": "string" } },
+          { "name": "locationId", "in": "query", "schema": { "type": "string" } },
+          { "name": "type", "in": "query", "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "List of immutable stock movements." }
+        }
+      }
+    },
+    "/stock/adjustments": {
+      "get": {
+        "summary": "List stock adjustments",
+        "responses": { "200": { "description": "List of stock adjustments." } }
+      },
+      "post": {
+        "summary": "Create and post stock adjustment with reason audit",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/StockAdjustmentRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Adjustment posted and stock balance updated." }
+        }
+      }
+    },
+    "/stock/transfers": {
+      "get": {
+        "summary": "List inter-location stock transfers",
+        "responses": { "200": { "description": "List of stock transfers." } }
+      },
+      "post": {
+        "summary": "Create draft stock transfer between locations",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/StockTransferRequest" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Transfer created in DRAFT state." } }
+      }
+    },
+    "/stock/transfers/{id}/dispatch": {
+      "post": {
+        "summary": "Dispatch transfer (reduces source on-hand and moves to in-transit)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Transfer dispatched into IN_TRANSIT status." } }
+      }
+    },
+    "/stock/transfers/{id}/receive": {
+      "post": {
+        "summary": "Receive transfer at destination location",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Transfer received and destination stock increased." } }
+      }
+    },
+    "/stock/reorder-suggestions": {
+      "get": {
+        "summary": "Get algorithmic reorder suggestions based on sales velocity and safety thresholds",
+        "responses": { "200": { "description": "List of suggested restock purchase orders." } }
+      }
+    },
+    "/purchases/orders": {
+      "get": {
+        "summary": "List purchase orders",
+        "responses": { "200": { "description": "List of purchase orders." } }
+      },
+      "post": {
+        "summary": "Create purchase order (Stock remains unchanged until goods receipt posted)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PurchaseOrderRequest" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Purchase order created." } }
+      }
+    },
+    "/purchases/receipts": {
+      "get": {
+        "summary": "List goods receipt notes (GRN)",
+        "responses": { "200": { "description": "List of goods receipts." } }
+      },
+      "post": {
+        "summary": "Post goods receipt and increment inventory balances atomically",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PurchaseReceiptRequest" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Receipt posted and stock increased." } }
+      }
+    },
+    "/sales/orders": {
+      "get": {
+        "summary": "List sales orders",
+        "responses": { "200": { "description": "List of sales orders." } }
+      }
+    },
+    "/sales/checkout": {
+      "post": {
+        "summary": "Execute POS checkout, deduct inventory, and record customer transaction",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PosCheckoutRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Sale completed, receipt payload returned." },
+          "400": { "description": "Insufficient inventory or invalid payload." }
+        }
+      }
+    },
+    "/sales/returns": {
+      "get": {
+        "summary": "List customer sales returns",
+        "responses": { "200": { "description": "List of sales returns." } }
+      },
+      "post": {
+        "summary": "Process sales return (only increases stock if inspected & restockApproved = true)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SalesReturnRequest" }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Sales return processed." } }
+      }
+    },
+    "/reports/dashboard-kpis": {
+      "get": {
+        "summary": "Retrieve 8 executive KPI cards and operational charts",
+        "responses": { "200": { "description": "Dashboard analytics payload." } }
+      }
+    },
+    "/reports/profitability": {
+      "get": {
+        "summary": "Calculate weighted average COGS, gross margin, and revenue breakdown",
+        "responses": { "200": { "description": "Profitability analysis report." } }
+      }
+    },
+    "/imports/template": {
+      "get": {
+        "summary": "Download standardized CSV import template",
+        "responses": { "200": { "description": "CSV file stream." } }
+      }
+    },
+    "/imports/validate": {
+      "post": {
+        "summary": "Dry-run validation of product import CSV",
+        "responses": { "200": { "description": "Validation results with error rows." } }
+      }
+    },
+    "/imports/process": {
+      "post": {
+        "summary": "Execute batch import and write opening balance ledger entries",
+        "responses": { "200": { "description": "Batch import results." } }
+      }
+    },
+    "/alerts": {
+      "get": {
+        "summary": "Fetch active inventory alerts (Low stock, out of stock, overstock)",
+        "responses": { "200": { "description": "List of system inventory alerts." } }
+      }
+    }
+  }
+}
+
