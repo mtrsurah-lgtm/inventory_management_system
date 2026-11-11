@@ -23,6 +23,7 @@ import {
   ChevronRight,
   LogOut,
   AlertTriangle,
+  Barcode,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -50,6 +51,7 @@ export function Sidebar({ user, isOpen = true, onClose }: SidebarProps) {
         { name: 'Stock Movements', href: '/inventory/movements', icon: History },
         { name: 'Stock Transfers', href: '/inventory/transfers', icon: ArrowLeftRight },
         { name: 'Stock Adjustments', href: '/inventory/adjustments', icon: Sliders },
+        { name: 'Batches & Serials', href: '/inventory/batches', icon: Barcode },
         { name: 'Inventory Alerts', href: '/inventory/alerts', icon: AlertTriangle, alertCount: true },
       ],
     },

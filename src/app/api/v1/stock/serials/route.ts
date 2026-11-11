@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
-import { successResponse, errorResponse } from '@/lib/api-response';
+import { getAuthSession, checkPermission } from '@/lib/auth';
+import { apiSuccess, apiError } from '@/lib/api-response';
 import { z } from 'zod';
 
 const createSerialSchema = z.object({
@@ -12,10 +12,9 @@ const createSerialSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return errorResponse('Unauthorized', 401);
-    }
+    const session = await getAuthSession(request);
+    const authCheck = checkPermission(session, 'inventory.view');
+    if (authCheck) return authCheck;
 
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('productId');
@@ -23,7 +22,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const search = searchParams.get('search');
 
-    const where: any = { orgId: user.orgId };
+    const where: any = { orgId: session!.orgId };
     if (productId) where.productId = productId;
     if (locationId) where.locationId = locationId;
     if (status) where.status = status;
@@ -41,18 +40,17 @@ export async function GET(request: NextRequest) {
       take: 100,
     });
 
-    return successResponse(serials);
+    return apiSuccess({ data: serials });
   } catch (error: any) {
-    return errorResponse(error.message || 'Failed to fetch serial numbers', 500);
+    return apiError({ message: error.message || 'Failed to fetch serial numbers', status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return errorResponse('Unauthorized', 401);
-    }
+    const session = await getAuthSession(request);
+    const authCheck = checkPermission(session, 'inventory.create');
+    if (authCheck) return authCheck;
 
     const body = await request.json();
     const validated = createSerialSchema.parse(body);
@@ -62,7 +60,7 @@ export async function POST(request: NextRequest) {
       for (const sn of validated.serialNumbers) {
         const item = await tx.serialNumber.create({
           data: {
-            orgId: user.orgId,
+            orgId: session!.orgId,
             productId: validated.productId,
             locationId: validated.locationId || null,
             serialNumber: sn.trim(),
@@ -74,15 +72,22 @@ export async function POST(request: NextRequest) {
       return results;
     });
 
-    return successResponse(created, `Successfully registered ${created.length} serial numbers`, 201);
+    return apiSuccess({
+      data: created,
+      message: `Successfully registered ${created.length} serial numbers`,
+      status: 201,
+    });
   } catch (error: any) {
     if (error.code === 'P2002') {
-      return errorResponse('One or more serial numbers already exist', 409);
+      return apiError({ message: 'One or more serial numbers already exist', status: 409 });
     }
     if (error instanceof z.ZodError) {
-      return errorResponse('Validation failed', 400, error.errors.map((e) => e.message));
+      return apiError({
+        message: 'Validation failed',
+        details: error.errors.map((e) => e.message),
+        status: 400,
+      });
     }
-    return errorResponse(error.message || 'Failed to register serial numbers', 500);
+    return apiError({ message: error.message || 'Failed to register serial numbers', status: 500 });
   }
 }
-

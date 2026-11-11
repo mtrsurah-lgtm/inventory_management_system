@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
-import { successResponse, errorResponse } from '@/lib/api-response';
+import { getAuthSession, checkPermission } from '@/lib/auth';
+import { apiSuccess, apiError } from '@/lib/api-response';
 import { z } from 'zod';
 
 const createBatchSchema = z.object({
@@ -16,17 +16,16 @@ const createBatchSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return errorResponse('Unauthorized', 401);
-    }
+    const session = await getAuthSession(request);
+    const authCheck = checkPermission(session, 'inventory.view');
+    if (authCheck) return authCheck;
 
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get('productId');
     const locationId = searchParams.get('locationId');
     const status = searchParams.get('status');
 
-    const where: any = { orgId: user.orgId };
+    const where: any = { orgId: session!.orgId };
     if (productId) where.productId = productId;
     if (locationId) where.locationId = locationId;
     if (status) where.status = status;
@@ -70,18 +69,17 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return successResponse(formatted);
+    return apiSuccess({ data: formatted });
   } catch (error: any) {
-    return errorResponse(error.message || 'Failed to fetch batches', 500);
+    return apiError({ message: error.message || 'Failed to fetch batches', status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return errorResponse('Unauthorized', 401);
-    }
+    const session = await getAuthSession(request);
+    const authCheck = checkPermission(session, 'inventory.create');
+    if (authCheck) return authCheck;
 
     const body = await request.json();
     const validated = createBatchSchema.parse(body);
@@ -89,7 +87,7 @@ export async function POST(request: NextRequest) {
     const existing = await prisma.productBatch.findUnique({
       where: {
         orgId_productId_batchNumber: {
-          orgId: user.orgId,
+          orgId: session!.orgId,
           productId: validated.productId,
           batchNumber: validated.batchNumber,
         },
@@ -97,12 +95,12 @@ export async function POST(request: NextRequest) {
     });
 
     if (existing) {
-      return errorResponse('Batch number already exists for this product', 409);
+      return apiError({ message: 'Batch number already exists for this product', status: 409 });
     }
 
     const batch = await prisma.productBatch.create({
       data: {
-        orgId: user.orgId,
+        orgId: session!.orgId,
         productId: validated.productId,
         locationId: validated.locationId || null,
         batchNumber: validated.batchNumber,
@@ -117,12 +115,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return successResponse(batch, 'Batch created successfully', 201);
+    return apiSuccess({ data: batch, message: 'Batch created successfully', status: 201 });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return errorResponse('Validation failed', 400, error.errors.map((e) => e.message));
+      return apiError({
+        message: 'Validation failed',
+        details: error.errors.map((e) => e.message),
+        status: 400,
+      });
     }
-    return errorResponse(error.message || 'Failed to create batch', 500);
+    return apiError({ message: error.message || 'Failed to create batch', status: 500 });
   }
 }
-
